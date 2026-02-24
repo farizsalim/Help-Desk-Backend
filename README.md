@@ -314,10 +314,6 @@ Catatan aktivitas untuk audit trail.
 
 Fitur yang direncanakan untuk versi berikutnya:
 - [ ] Attachment file dalam chat
-- [ ] Email notifications
-- [ ] Analytics dashboard
-- [ ] Mobile app (React Native)
-- [ ] AI-powered auto-reply
 
 ---
 
