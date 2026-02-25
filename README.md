@@ -365,9 +365,6 @@ curl -X POST http://localhost:8000/messages \
 ## 🎯 Roadmap Pengembangan
 
 Fitur yang direncanakan untuk versi berikutnya:
-- [ ] Email notifications
-- [ ] Analytics dashboard
-- [ ] Mobile app (React Native)
 - [ ] AI-powered auto-reply
 
 ---
