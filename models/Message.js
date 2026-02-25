@@ -13,8 +13,32 @@ const messageSchema = new mongoose.Schema({
   },
   isi_pesan: {
     type: String,
-    required: [true, 'Message content is required'],
+    required: function() {
+      return !this.attachment; // Required only if no attachment
+    },
     trim: true
+  },
+  attachment: {
+    filename: {
+      type: String,
+      default: null
+    },
+    originalname: {
+      type: String,
+      default: null
+    },
+    mimetype: {
+      type: String,
+      default: null
+    },
+    size: {
+      type: Number,
+      default: null
+    },
+    url: {
+      type: String,
+      default: null
+    }
   },
   sent_at: {
     type: Date,

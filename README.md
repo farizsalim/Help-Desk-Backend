@@ -158,8 +158,16 @@ Catatan aktivitas untuk audit trail.
 
 ### 📨 Message System
 - **Create & Read**: Kirim dan baca pesan
+- **Image Upload**: Upload gambar dalam chat (Multer + Sharp)
+- **Image Processing**: Kompresi otomatis, resize max 1200px
 - **Sender Population**: Data pengirim lengkap dengan work_id
 - **Timestamp Tracking**: Waktu pengiriman presisi
+
+### 📎 File Upload System (v1.1)
+- **Multer Integration**: Handle multipart/form-data
+- **Sharp Processing**: Kompresi & optimasi gambar
+- **File Validation**: Tipe file (JPEG, PNG, GIF, WEBP) & ukuran (max 5MB)
+- **Static Serving**: Akses file via `/uploads/chat/filename`
 
 ### 📋 Activity Logging
 - **Audit Trail**: Catatan semua aktivitas tiket
@@ -178,6 +186,8 @@ Catatan aktivitas untuk audit trail.
 | **Mongoose** | 7.x | ODM untuk MongoDB |
 | **Socket.IO** | 4.x | Real-time communication |
 | **JWT** | 9.x | JSON Web Token authentication |
+| **Multer** | 1.x | File upload handling |
+| **Sharp** | 0.33.x | Image processing & compression |
 | **bcryptjs** | 2.x | Password hashing |
 | **CORS** | 2.x | Cross-origin resource sharing |
 
@@ -290,7 +300,44 @@ Catatan aktivitas untuk audit trail.
 | Method | Endpoint | Deskripsi | Akses |
 |--------|----------|-----------|-------|
 | GET | `/api/messages/:conversation_id` | List pesan | Participant |
-| POST | `/api/messages` | Kirim pesan | Participant |
+| POST | `/api/messages` | Kirim pesan (text/image) | Participant |
+| DELETE | `/api/messages/:id` | Hapus pesan | Admin |
+
+#### Upload Gambar dalam Chat
+Endpoint `POST /api/messages` mendukung upload gambar dengan **multipart/form-data**:
+
+```bash
+curl -X POST http://localhost:8000/messages \
+  -H "Authorization: Bearer <token>" \
+  -F "conversation_id=<id>" \
+  -F "isi_pesan=Optional caption" \
+  -F "image=@/path/to/image.jpg"
+```
+
+**Field:**
+- `conversation_id` (required): ID conversation
+- `isi_pesan` (optional): Teks pesan
+- `image` (optional): File gambar (JPEG, PNG, GIF, WEBP, max 5MB)
+
+**Response dengan gambar:**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "...",
+    "isi_pesan": "Optional caption",
+    "attachment": {
+      "filename": "chat-1234567890-1234567890.jpg",
+      "originalname": "photo.jpg",
+      "mimetype": "image/jpeg",
+      "size": 245760,
+      "url": "http://localhost:8000/uploads/chat/chat-1234567890-1234567890.jpg"
+    },
+    "sender_id": { "nama": "John", "role": "user", "work_id": "EMP001" },
+    "sent_at": "2026-02-22T10:30:00.000Z"
+  }
+}
+```
 
 ### Users
 | Method | Endpoint | Deskripsi | Akses |
@@ -303,20 +350,28 @@ Catatan aktivitas untuk audit trail.
 
 ## 📝 Versi
 
-**Versi 1.0** - *Initial Release*
+**Versi 1.1** - *Image Upload Release*
 
-> Versi ini merupakan fondasi dari sistem Help Desk Chat. 
-> Pengembangan lebih lanjut akan menyusul untuk peningkatan fitur dan optimasi.
+> Versi ini menambahkan fitur upload gambar dalam chat dengan kompresi otomatis.
+
+### Changelog v1.1
+- ✅ **Image Upload**: Kirim gambar dalam chat (JPEG, PNG, GIF, WEBP)
+- ✅ **Image Compression**: Otomatis kompres dan resize gambar dengan Sharp
+- ✅ **Static File Serving**: Akses gambar via URL publik
+- ✅ **File Validation**: Validasi tipe dan ukuran file (max 5MB)
 
 ---
 
 ## 🎯 Roadmap Pengembangan
 
 Fitur yang direncanakan untuk versi berikutnya:
-- [ ] Attachment file dalam chat
+- [ ] Email notifications
+- [ ] Analytics dashboard
+- [ ] Mobile app (React Native)
+- [ ] AI-powered auto-reply
 
 ---
 
 <p align="center">
-  <i>✨ Help Desk Chat v1.0 ✨</i>
+  <i>✨ Help Desk Chat v1.1 ✨</i>
 </p>

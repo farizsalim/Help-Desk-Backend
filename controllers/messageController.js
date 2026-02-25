@@ -1,17 +1,19 @@
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
+const { processImage, generateFilename, getFileUrl } = require('../config/upload');
 
-// @desc    Send message in a conversation
+// @desc    Send message in a conversation (with optional image)
 // @route   POST /messages
 // @access  Private
 exports.sendMessage = async (req, res) => {
   try {
     const { conversation_id, isi_pesan } = req.body;
 
-    if (!conversation_id || !isi_pesan || isi_pesan.trim() === '') {
+    // Validate conversation_id
+    if (!conversation_id) {
       return res.status(400).json({
         success: false,
-        message: 'Conversation ID and message content are required'
+        message: 'Conversation ID is required'
       });
     }
 
@@ -44,19 +46,52 @@ exports.sendMessage = async (req, res) => {
       });
     }
 
-    // Create message
-    const message = await Message.create({
+    // Prepare message data
+    const messageData = {
       conversation_id,
       sender_id: req.user._id,
-      isi_pesan: isi_pesan.trim()
-    });
+      isi_pesan: isi_pesan ? isi_pesan.trim() : ''
+    };
+
+    // Handle image upload if present
+    if (req.file) {
+      const filename = generateFilename(req.file.originalname);
+      const processResult = await processImage(req.file.buffer, filename);
+
+      if (!processResult.success) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to process image',
+          error: processResult.error
+        });
+      }
+
+      messageData.attachment = {
+        filename: filename,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: processResult.size,
+        url: getFileUrl(filename, req)
+      };
+    }
+
+    // Validate: must have either text or attachment
+    if (!messageData.isi_pesan && !messageData.attachment) {
+      return res.status(400).json({
+        success: false,
+        message: 'Message must contain text or image'
+      });
+    }
+
+    // Create message
+    const message = await Message.create(messageData);
 
     // Update conversation updatedAt
     conversation.updatedAt = new Date();
     await conversation.save();
 
     // Populate sender info
-    await message.populate('sender_id', 'nama role');
+    await message.populate('sender_id', 'nama role work_id');
 
     // Emit socket event to all users in the conversation
     if (global.io) {
@@ -137,6 +172,12 @@ exports.deleteMessage = async (req, res) => {
         success: false,
         message: 'Message not found'
       });
+    }
+
+    // Delete attachment file if exists
+    if (message.attachment && message.attachment.filename) {
+      const { deleteFile } = require('../config/upload');
+      deleteFile(message.attachment.filename);
     }
 
     await message.deleteOne();
