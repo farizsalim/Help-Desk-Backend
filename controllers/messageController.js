@@ -6,9 +6,17 @@ const Conversation = require('../models/Conversation');
 // @access  Private
 exports.sendMessage = async (req, res) => {
   try {
-    const { conversation_id, isi_pesan } = req.body;
+    console.log('Request headers:', req.headers);
+    console.log('Request body:', req.body);
+    console.log('Content-Type:', req.headers['content-type']);
+    
+    const { conversation_id, isi_pesan } = req.body || {};
+
+    console.log('Parsed conversation_id:', conversation_id);
+    console.log('Parsed isi_pesan:', isi_pesan);
 
     if (!conversation_id || !isi_pesan || isi_pesan.trim() === '') {
+      console.error('Validation failed - Missing required fields');
       return res.status(400).json({
         success: false,
         message: 'Conversation ID and message content are required'

@@ -8,6 +8,7 @@ module.exports = (io) => {
       const token = socket.handshake.auth.token;
       
       if (!token) {
+        console.log('Socket connection rejected: No token provided');
         return next(new Error('Authentication error: No token provided'));
       }
 
@@ -15,18 +16,22 @@ module.exports = (io) => {
       const user = await User.findById(decoded.id).select('-password');
       
       if (!user) {
+        console.log('Socket connection rejected: User not found');
         return next(new Error('Authentication error: User not found'));
       }
 
       socket.user = user;
+      console.log(`Socket authentication successful: ${user.nama} (${user._id})`);
       next();
     } catch (error) {
+      console.error('Socket authentication error:', error.message);
       next(new Error('Authentication error: Invalid token'));
     }
   });
 
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.user.nama} (${socket.user._id})`);
+    console.log(`Connection ID: ${socket.id}`);
 
     // Join conversation room
     socket.on('join_conversation', (conversationId) => {
@@ -55,9 +60,19 @@ module.exports = (io) => {
       });
     });
 
+    // Handle errors
+    socket.on('error', (error) => {
+      console.error(`Socket error for user ${socket.user.nama}:`, error);
+    });
+
     // Handle disconnect
     socket.on('disconnect', () => {
       console.log(`User disconnected: ${socket.user.nama} (${socket.user._id})`);
+    });
+
+    // Handle connection errors
+    socket.on('connect_error', (error) => {
+      console.error(`Socket connection error: ${error.message}`);
     });
   });
 

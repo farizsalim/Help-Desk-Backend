@@ -1,322 +1,444 @@
-# 🤖 Help Desk Chat - Backend API
+# Help Desk Backend
 
-> *Backend API untuk Sistem Tiket Dukungan Berbasis Chat Real-Time*
+Backend ini menyediakan API autentikasi, manajemen user, tiket percakapan, pesan chat, activity log, dan koneksi real-time dengan Socket.IO untuk aplikasi help desk.
 
----
+## Ringkasan
 
-## 📋 Daftar Isi
+- Runtime: Node.js
+- Framework: Express
+- Database: MongoDB dengan Mongoose
+- Auth: JWT Bearer Token
+- Real-time: Socket.IO
+- Parsing request: JSON, URL-encoded, dan `multipart/form-data` untuk endpoint pesan
 
-1. [Tentang Backend](#-tentang-backend)
-2. [Struktur Database](#-struktur-database)
-3. [Model & Koleksi](#-model--koleksi)
-4. [Fitur Backend](#-fitur-backend)
-5. [Teknologi](#-teknologi)
-6. [Instalasi](#-instalasi)
-7. [Penggunaan](#-penggunaan)
-8. [API Endpoints](#-api-endpoints)
+Server berjalan dengan prefix route langsung dari root. Tidak ada prefix `/api` pada implementasi saat ini.
 
----
+Contoh:
 
-## 🎯 Tentang Backend
+- `POST /auth/login`
+- `GET /conversations`
+- `POST /messages`
 
-Backend API ini menyediakan layanan untuk sistem Help Desk Chat yang memungkinkan user menghubungi Call Center untuk troubleshooting masalah melalui chat real-time.
+## Fitur Yang Sudah Ada
 
-### ✨ Prinsip Backend
+- Registrasi user baru dengan role default `user`
+- Login dan pengambilan profil user aktif
+- Proteksi route dengan JWT
+- Otorisasi berbasis role: `user`, `admin`, `it_staff`
+- Pembuatan tiket/conversation oleh user
+- Penambahan IT staff ke conversation oleh admin
+- Penutupan conversation oleh admin atau IT staff
+- Pengiriman dan pengambilan pesan per conversation
+- Pengambilan activity log per conversation
+- Event real-time untuk ticket dan chat
 
-> *"API yang baik adalah API yang cepat, aman, dan mudah diintegrasikan"*
+## Struktur Proyek
 
-- **RESTful API**: Endpoint yang terstruktur dan konsisten
-- **Real-Time Communication**: Socket.IO untuk chat dan notifikasi
-- **Secure Authentication**: JWT dengan proteksi role-based
-- **Clean Code**: MVC pattern dengan separation of concerns
-
----
-
-## 🗄️ Struktur Database
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│     USERS       │     │  CONVERSATIONS  │     │    MESSAGES     │
-├─────────────────┤     ├─────────────────┤     ├─────────────────┤
-│ _id             │◄────┤ participants[]  │◄────┤ conversation_id │
-│ nama            │     │ subject         │     │ sender_id       │
-│ email           │     │ status          │     │ isi_pesan       │
-│ password        │     │ is_locked       │     │ sent_at         │
-│ role            │     │ closed_by       │────►│                 │
-│ work_id         │     │ closed_at       │     │                 │
-│ createdAt       │     │ createdAt       │     │                 │
-│ updatedAt       │     │ updatedAt       │     │                 │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-         │
-         │              ┌─────────────────┐
-         └─────────────►│  ACTIVITY_LOGS  │
-                        ├─────────────────┤
-                        │ conversation_id │
-                        │ action          │
-                        │ performed_by    │
-                        │ target_user     │
-                        │ details         │
-                        │ timestamp       │
-                        └─────────────────┘
-```
-
----
-
-## 📦 Model & Koleksi
-
-### 1. 👤 User
-Menyimpan data pengguna sistem dengan tiga peran berbeda.
-
-| Field | Tipe | Deskripsi |
-|-------|------|-----------|
-| `_id` | ObjectId | Identifier unik pengguna |
-| `nama` | String | Nama lengkap pengguna |
-| `email` | String | Email unik untuk login |
-| `password` | String | Password terenkripsi (bcrypt) |
-| `role` | String | Peran: `user`, `it_staff`, atau `admin` |
-| `work_id` | String | ID karyawan (unik per organisasi) |
-| `createdAt` | Date | Tanggal registrasi |
-| `updatedAt` | Date | Tanggal update terakhir |
-
-**Relasi:**
-- Satu User dapat memiliki banyak Conversations (sebagai participant)
-- Satu User dapat mengirim banyak Messages
-
----
-
-### 2. 💬 Conversation (Ticket)
-Representasi dari tiket dukungan yang berisi percakapan.
-
-| Field | Tipe | Deskripsi |
-|-------|------|-----------|
-| `_id` | ObjectId | Identifier unik tiket |
-| `subject` | String | Judul/subjek permasalahan |
-| `participants` | Array[ObjectId] | Daftar user yang terlibat (ref: User) |
-| `status` | String | Status: `open`, `in_progress`, `closed` |
-| `is_locked` | Boolean | Apakah tiket sudah ditutup permanen |
-| `closed_by` | ObjectId | User yang menutup tiket (ref: User) |
-| `closed_at` | Date | Tanggal penutupan tiket |
-| `createdAt` | Date | Tanggal pembuatan tiket |
-| `updatedAt` | Date | Tanggal update terakhir |
-
-**Relasi:**
-- Satu Conversation memiliki banyak Messages
-- Satu Conversation melibatkan banyak Users (participants)
-
----
-
-### 3. 📨 Message
-Pesan individual dalam sebuah percakapan.
-
-| Field | Tipe | Deskripsi |
-|-------|------|-----------|
-| `_id` | ObjectId | Identifier unik pesan |
-| `conversation_id` | ObjectId | Referensi ke Conversation |
-| `sender_id` | ObjectId | Pengirim pesan (ref: User) |
-| `isi_pesan` | String | Konten teks pesan |
-| `sent_at` | Date | Waktu pengiriman |
-
-**Relasi:**
-- Satu Message milik satu Conversation
-- Satu Message dikirim oleh satu User
-
----
-
-### 4. 📋 ActivityLog
-Catatan aktivitas untuk audit trail.
-
-| Field | Tipe | Deskripsi |
-|-------|------|-----------|
-| `_id` | ObjectId | Identifier unik log |
-| `conversation_id` | ObjectId | Tiket terkait (ref: Conversation) |
-| `action` | String | Jenis aksi: `CREATED`, `ADD_IT_STAFF`, `CLOSED` |
-| `performed_by` | ObjectId | User yang melakukan aksi (ref: User) |
-| `target_user` | ObjectId | User target (opsional, ref: User) |
-| `details` | String | Keterangan detail |
-| `timestamp` | Date | Waktu kejadian |
-
----
-
-## 🚀 Fitur Backend
-
-### 🔐 Autentikasi & Keamanan
-- **JWT-based Authentication**: Token-based login dengan expiry
-- **Password Hashing**: Enkripsi bcrypt dengan salt round 10
-- **Role-based Access Control**: Middleware proteksi per level user (user, it_staff, admin)
-
-### 💡 Real-Time Communication (Socket.IO)
-- **Bidirectional Event**: Chat real-time antara user dan staf
-- **Room-based Messaging**: Pesan terisolasi per conversation
-- **Broadcast Events**: Notifikasi ke semua client terkait
-- **Typing Indicators**: Event saat user sedang mengetik
-
-### 🎫 Manajemen Tiket (Conversation)
-- **CRUD Operations**: Create, Read, Update (status), Delete (soft)
-- **Status Workflow**: `open` → `in_progress` → `closed`
-- **Participant Management**: Auto-assign admin, manual assign IT staff
-- **Data Population**: MongoDB populate untuk relasi user
-
-### 📨 Message System
-- **Create & Read**: Kirim dan baca pesan
-- **Sender Population**: Data pengirim lengkap dengan work_id
-- **Timestamp Tracking**: Waktu pengiriman presisi
-
-### 📋 Activity Logging
-- **Audit Trail**: Catatan semua aktivitas tiket
-- **Action Types**: CREATED, ADD_IT_STAFF, CLOSED
-
----
-
-## 🛠️ Teknologi
-
-### Core Stack
-| Teknologi | Versi | Kegunaan |
-|-----------|-------|----------|
-| **Node.js** | 18.x | Runtime environment |
-| **Express.js** | 4.x | Web framework |
-| **MongoDB** | 6.x | Database NoSQL |
-| **Mongoose** | 7.x | ODM untuk MongoDB |
-| **Socket.IO** | 4.x | Real-time communication |
-| **JWT** | 9.x | JSON Web Token authentication |
-| **bcryptjs** | 2.x | Password hashing |
-| **CORS** | 2.x | Cross-origin resource sharing |
-
-### Development Tools
-- **nodemon**: Auto-restart saat development
-- **dotenv**: Environment variables management
-
----
-
-## ⚙️ Instalasi
-
-### Prasyarat
-- Node.js v18+ terinstall
-- MongoDB server berjalan
-- Git (opsional)
-
-### Langkah Instalasi
-
-1. **Clone repository**
-   ```bash
-   git clone <repository-url>
-   cd Chat-Helping/Backend
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Setup environment variables**
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Edit file `.env`:
-   ```env
-   PORT=8000
-   MONGODB_URI=mongodb://localhost:27017/helpdesk_chat
-   JWT_SECRET=your_super_secret_key_here
-   NODE_ENV=development
-   ```
-
-4. **Jalankan server**
-   ```bash
-   # Development mode
-   npm run dev
-   
-   # Production mode
-   npm start
-   ```
-
-5. **Verifikasi instalasi**
-   ```
-   Server running on port 8000
-   MongoDB Connected
-   ```
-
----
-
-## 🎮 Penggunaan
-
-### Inisialisasi Data Awal
-
-1. **Buat Admin pertama** (Manual di Database agar Aman):
-
-2. **Buat IT Staff** (Di add oleh Admin )
-
-### Alur Kerja Sistem
-
-```
-┌─────────┐     ┌─────────────┐     ┌─────────────┐
-│  USER   │────►│Create Ticket│────►│    OPEN     │
-└─────────┘     └─────────────┘     └──────┬──────┘
-                                           │
-                                           ▼
-┌─────────┐     ┌─────────────┐     ┌─────────────┐
-│  ADMIN  │◄────│Assign Staff │────►│ IN_PROGRESS │
-└────┬────┘     └─────────────┘     └──────┬──────┘
-     │                                     │
-     │    ┌─────────────┐     ┌─────────┐  │
-     └───►│   IT STAFF  │◄────│  Chat   │◄─┘
-          └──────┬──────┘     └─────────┘
-                 │
-                 ▼
-          ┌─────────────┐
-          │    CLOSE    │
-          └─────────────┘
+```text
+.
+|-- config/
+|   `-- database.js
+|-- controllers/
+|   |-- activityLogController.js
+|   |-- authController.js
+|   |-- conversationController.js
+|   |-- messageController.js
+|   `-- userController.js
+|-- middleware/
+|   |-- authMiddleware.js
+|   `-- roleMiddleware.js
+|-- models/
+|   |-- ActivityLog.js
+|   |-- Conversation.js
+|   |-- Message.js
+|   `-- User.js
+|-- routes/
+|   |-- authRoutes.js
+|   |-- conversationRoutes.js
+|   |-- messageRoutes.js
+|   `-- userRoutes.js
+|-- socket/
+|   `-- socketHandler.js
+|-- uploads/
+|   `-- chat/
+|-- server.js
+`-- package.json
 ```
 
----
+## Teknologi Dan Dependency Utama
 
-## 🔌 API Endpoints
+Dependency yang memang terpasang di project saat ini:
 
-### Autentikasi
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| POST | `/api/auth/register` | Registrasi user baru |
-| POST | `/api/auth/login` | Login dan dapatkan token |
+- `express`
+- `mongoose`
+- `jsonwebtoken`
+- `bcrypt`
+- `socket.io`
+- `cors`
+- `dotenv`
+- `body-parser`
+- `express-validator`
+- `multer`
+- `nodemon` untuk development
 
-### Conversations (Tiket)
-| Method | Endpoint | Deskripsi | Akses |
-|--------|----------|-----------|-------|
-| GET | `/api/conversations` | List semua tiket | All |
-| POST | `/api/conversations` | Buat tiket baru | User |
-| GET | `/api/conversations/:id` | Detail tiket | Participant |
-| POST | `/api/conversations/:id/add-it-staff` | Tambah IT Staff | Admin |
-| POST | `/api/conversations/:id/close` | Tutup tiket | Admin/IT Staff |
+Ada juga dependency seperti `ejs`, `express-session`, dan `connect-mongo` di `package.json`, tetapi belum dipakai langsung di alur server yang ada sekarang.
+
+## Konfigurasi Environment
+
+Buat file `.env` di root backend. Variabel yang dipakai oleh kode saat ini:
+
+```env
+PORT=8000
+MONGODB_URI=mongodb://127.0.0.1:27017/helpdesk
+JWT_SECRET=change_this_secret
+JWT_EXPIRE=7d
+FRONTEND_URL=http://localhost:5173
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+Keterangan:
+
+- `PORT`: port server Express dan Socket.IO
+- `MONGODB_URI`: koneksi MongoDB
+- `JWT_SECRET`: secret untuk signing token
+- `JWT_EXPIRE`: masa berlaku token, default di kode adalah `7d`
+- `FRONTEND_URL`: dipakai sebagai origin tambahan dan log akses
+- `ALLOWED_ORIGINS`: daftar origin dipisahkan koma untuk Socket.IO
+
+Catatan:
+
+- Middleware `cors()` Express masih memakai konfigurasi default terbuka.
+- Validasi origin kustom saat ini diterapkan di Socket.IO, bukan di middleware Express.
+
+## Instalasi Dan Menjalankan Project
+
+```bash
+npm install
+npm run dev
+```
+
+Mode production:
+
+```bash
+npm start
+```
+
+Jika koneksi berhasil, server akan:
+
+- terkoneksi ke MongoDB
+- listen di `http://localhost:<PORT>`
+- mengaktifkan Socket.IO
+
+## Base URL Dan Route Root
+
+Endpoint root:
+
+```http
+GET /
+```
+
+Contoh response:
+
+```json
+{
+   "message": "Server is running successfully!",
+   "socket": "Socket.IO enabled",
+   "endpoints": {
+      "auth": "/auth",
+      "users": "/users",
+      "conversations": "/conversations",
+      "messages": "/messages"
+   }
+}
+```
+
+## Model Data
+
+### User
+
+Collection user menyimpan akun sistem.
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| `work_id` | String | wajib, unik |
+| `nama` | String | wajib |
+| `email` | String | wajib, unik, lowercase |
+| `password` | String | wajib, minimal 6 karakter, disimpan dalam bentuk hash |
+| `role` | String | enum: `user`, `admin`, `it_staff` |
+| `createdAt` | Date | otomatis |
+| `updatedAt` | Date | otomatis |
+
+Perilaku tambahan:
+
+- password di-hash dengan bcrypt sebelum save
+- field password tidak ikut terambil secara default
+
+### Conversation
+
+Merepresentasikan tiket help desk.
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| `subject` | String | wajib |
+| `participants` | ObjectId[] | referensi ke `User` |
+| `status` | String | enum: `open`, `in_progress`, `closed` |
+| `is_locked` | Boolean | `true` jika tiket sudah ditutup |
+| `closed_by` | ObjectId | referensi ke `User`, default `null` |
+| `closed_at` | Date | waktu penutupan, default `null` |
+| `createdAt` | Date | otomatis |
+| `updatedAt` | Date | otomatis |
+
+Perilaku tambahan:
+
+- saat tiket dibuat, participant awal adalah user pembuat + satu admin
+- ada index pada `participants` dan `status`
+
+### Message
+
+Menyimpan pesan di dalam conversation.
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| `conversation_id` | ObjectId | referensi ke `Conversation`, wajib |
+| `sender_id` | ObjectId | referensi ke `User`, wajib |
+| `isi_pesan` | String | isi pesan, wajib |
+| `sent_at` | Date | default `Date.now` |
+| `createdAt` | Date | otomatis |
+| `updatedAt` | Date | otomatis |
+
+Perilaku tambahan:
+
+- ada index pada `conversation_id` dan `sent_at`
+
+### ActivityLog
+
+Mencatat perubahan penting pada conversation.
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| `conversation_id` | ObjectId | referensi ke `Conversation`, wajib |
+| `action` | String | enum: `ADD_IT_STAFF`, `CLOSED`, `CREATED`, `REOPENED`, `STATUS_CHANGED` |
+| `actor_id` | ObjectId | user yang melakukan aksi |
+| `target_user_id` | ObjectId | user target, opsional |
+| `details` | String | detail tambahan |
+| `timestamp` | Date | default `Date.now` |
+| `createdAt` | Date | otomatis |
+| `updatedAt` | Date | otomatis |
+
+## Autentikasi
+
+Semua route private memakai header berikut:
+
+```http
+Authorization: Bearer <token>
+```
+
+Token dibuat saat login dan register dengan payload berisi id user.
+
+## Role Dan Hak Akses
+
+- `user`: membuat ticket, melihat conversation miliknya, mengirim pesan jika menjadi participant
+- `admin`: melihat semua conversation, menambah IT staff, mengelola user, dan tetap bisa mengakses conversation walau bukan participant
+- `it_staff`: dapat melihat semua conversation dan menutup conversation
+
+## Endpoint API
+
+### Auth
+
+1. `GET /auth/login`
+   Public. Menampilkan info penggunaan endpoint login.
+2. `GET /auth/register`
+   Public. Menampilkan info penggunaan endpoint register.
+3. `POST /auth/register`
+   Public. Register user baru.
+4. `POST /auth/login`
+   Public. Login user.
+5. `POST /auth/logout`
+   Pada implementasi route saat ini endpoint ini tidak diproteksi. Fungsinya hanya mengembalikan response logout, sedangkan token dihapus di sisi client.
+6. `GET /auth/me`
+   Private. Mengambil data user yang sedang login.
+
+Body register:
+
+```json
+{
+   "work_id": "EMP001",
+   "nama": "Fariz",
+   "email": "fariz@example.com",
+   "password": "secret123"
+}
+```
+
+Body login:
+
+```json
+{
+   "email": "fariz@example.com",
+   "password": "secret123"
+}
+```
+
+### Conversations
+
+Semua route conversation dilindungi middleware `protect`.
+
+1. `GET /conversations/new`
+   Private. Menampilkan info penggunaan endpoint create ticket.
+2. `GET /conversations`
+   Private. Mengambil list conversation. User biasa hanya melihat conversation miliknya.
+3. `POST /conversations`
+   Private. Membuat ticket baru.
+4. `GET /conversations/:id`
+   Private. Mengambil detail conversation beserta messages.
+5. `POST /conversations/:id/add-it-staff`
+   Admin. Menambahkan IT staff ke conversation.
+6. `POST /conversations/:id/close`
+   Admin atau IT Staff. Menutup conversation.
+7. `GET /conversations/:id/logs`
+   Private. Mengambil activity log conversation.
+
+Body create conversation:
+
+```json
+{
+   "subject": "Printer tidak bisa digunakan"
+}
+```
+
+Body add IT staff:
+
+```json
+{
+   "it_staff_id": "<user_id_it_staff>"
+}
+```
+
+Query yang didukung:
+
+- `GET /conversations?status=open`
+- `GET /conversations?status=in_progress`
+- `GET /conversations?status=closed`
+
+Perilaku penting:
+
+- saat ticket dibuat, sistem mencari satu user dengan role `admin` untuk dimasukkan ke participant
+- jika tidak ada admin di database, pembuatan ticket akan gagal
+- route detail conversation juga mengembalikan daftar pesan conversation tersebut
 
 ### Messages
-| Method | Endpoint | Deskripsi | Akses |
-|--------|----------|-----------|-------|
-| GET | `/api/messages/:conversation_id` | List pesan | Participant |
-| POST | `/api/messages` | Kirim pesan | Participant |
+
+Semua route message dilindungi middleware `protect`.
+
+1. `POST /messages`
+   Private. Mengirim pesan ke conversation.
+2. `GET /messages/:conversation_id`
+   Private. Mengambil seluruh pesan dalam conversation.
+3. `DELETE /messages/:id`
+   Admin. Menghapus satu pesan.
+
+Body send message:
+
+```json
+{
+   "conversation_id": "<conversation_id>",
+   "isi_pesan": "Saya butuh bantuan akses VPN"
+}
+```
+
+Catatan request message:
+
+- endpoint `POST /messages` mendukung `application/json`
+- endpoint ini juga menerima `multipart/form-data` melalui `multer`
+- konfigurasi `multer` saat ini memakai `upload.none()`, jadi form-data dipakai untuk field text saja, bukan upload file
+- ada limit ukuran request form-data `5MB`
 
 ### Users
-| Method | Endpoint | Deskripsi | Akses |
-|--------|----------|-----------|-------|
-| GET | `/api/users` | List semua user | Admin |
-| GET | `/api/users/role/:role` | List user by role | Admin |
-| PUT | `/api/users/:id` | Update user | Admin |
 
----
+Semua route user saat ini dilindungi `protect` lalu `isAdmin`, jadi hanya admin yang bisa mengakses seluruh endpoint user.
 
-## 📝 Versi
+1. `GET /users`
+   Admin. Mengambil semua user.
+2. `GET /users/role/:role`
+   Admin. Memfilter user berdasarkan role.
+3. `GET /users/:id`
+   Admin. Mengambil detail user.
+4. `PUT /users/:id`
+   Admin. Mengupdate `nama`, `email`, atau `role`.
+5. `DELETE /users/:id`
+   Admin. Menghapus user.
 
-**Versi 1.0** - *Initial Release*
+Role yang valid untuk filter:
 
-> Versi ini merupakan fondasi dari sistem Help Desk Chat. 
-> Pengembangan lebih lanjut akan menyusul untuk peningkatan fitur dan optimasi.
+- `user`
+- `admin`
+- `it_staff`
 
----
+## Event Socket.IO
 
-## 🎯 Roadmap Pengembangan
+Socket.IO memakai autentikasi token JWT dari:
 
-Fitur yang direncanakan untuk versi berikutnya:
-- [ ] Attachment file dalam chat
+```js
+auth: {
+   token: '<jwt>'
+}
+```
 
----
+### Event dari client
 
-<p align="center">
-  <i>✨ Help Desk Chat v1.0 ✨</i>
-</p>
+| Event | Payload | Keterangan |
+|---|---|---|
+| `join_conversation` | `conversationId` | join ke room `conversation_<id>` |
+| `leave_conversation` | `conversationId` | leave room conversation |
+| `typing` | `{ conversationId }` | kirim indikator sedang mengetik |
+| `stop_typing` | `{ conversationId }` | hentikan indikator mengetik |
+
+### Event yang di-emit server
+
+| Event | Keterangan |
+|---|---|
+| `new_ticket` | ticket baru dibuat |
+| `it_staff_added` | IT staff ditambahkan ke conversation |
+| `ticket_closed` | conversation ditutup |
+| `new_message` | pesan baru pada room conversation |
+| `user_typing` | participant lain sedang mengetik |
+| `user_stop_typing` | participant lain berhenti mengetik |
+
+## Alur Ticket Yang Diimplementasikan
+
+1. User register atau login.
+2. User membuat ticket melalui `POST /conversations`.
+3. Sistem otomatis menambahkan satu admin ke participant ticket.
+4. Admin menambahkan IT staff lewat `POST /conversations/:id/add-it-staff`.
+5. Status conversation berubah menjadi `in_progress`.
+6. Participant bertukar pesan lewat REST dan Socket.IO.
+7. Admin atau IT staff menutup ticket lewat `POST /conversations/:id/close`.
+8. Status menjadi `closed` dan `is_locked = true`.
+
+## Catatan Implementasi Saat Ini
+
+- Tidak ada endpoint upload attachment meskipun folder `uploads/chat/` sudah ada.
+- `multer` saat ini hanya dipakai untuk parsing `multipart/form-data` tanpa file pada route pesan.
+- Route `POST /auth/logout` belum diproteksi dan hanya mengembalikan response sukses.
+- Ada method `getAllLogs` di controller activity log, tetapi belum dipasang ke route.
+- User dengan role `it_staff` dapat melihat semua conversation melalui `GET /conversations` karena filter khusus hanya diterapkan untuk role `user`.
+
+## Saran Penggunaan Untuk Testing Manual
+
+Urutan test yang masuk akal:
+
+1. Buat satu akun admin langsung di database atau ubah role salah satu user menjadi `admin`.
+2. Register user biasa melalui `POST /auth/register`.
+3. Login dan simpan token.
+4. Buat conversation baru.
+5. Login sebagai admin lalu tambahkan IT staff ke conversation.
+6. Kirim pesan dari participant yang terlibat.
+7. Tutup ticket sebagai admin atau IT staff.
+
+## Scripts
+
+```json
+{
+   "dev": "nodemon server.js",
+   "start": "node server.js"
+}
+```
