@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['user', 'admin', 'it_staff'],
     default: 'user'
+  },
+  fcm_tokens: {
+    type: [String],
+    default: []
   }
 }, {
   timestamps: true

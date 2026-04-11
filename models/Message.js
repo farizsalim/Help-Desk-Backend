@@ -13,8 +13,12 @@ const messageSchema = new mongoose.Schema({
   },
   isi_pesan: {
     type: String,
-    required: [true, 'Message content is required'],
+    default: '',
     trim: true
+  },
+  image_url: {
+    type: String,
+    default: null
   },
   sent_at: {
     type: Date,

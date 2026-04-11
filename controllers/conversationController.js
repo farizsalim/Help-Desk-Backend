@@ -112,9 +112,17 @@ exports.getConversations = async (req, res) => {
 // @access  Private
 exports.getConversationById = async (req, res) => {
   try {
-    const conversation = await Conversation.findById(req.params.id)
-      .populate('participants', 'nama email role work_id')
-      .populate('closed_by', 'nama role');
+    const param = req.params.id;
+
+    // Support lookup by ticket_id (e.g. TKT-0001) or MongoDB _id
+    const isTicketId = /^TKT-\d+$/i.test(param);
+    const conversation = isTicketId
+      ? await Conversation.findOne({ ticket_id: param.toUpperCase() })
+          .populate('participants', 'nama email role work_id')
+          .populate('closed_by', 'nama role')
+      : await Conversation.findById(param)
+          .populate('participants', 'nama email role work_id')
+          .populate('closed_by', 'nama role');
 
     if (!conversation) {
       return res.status(404).json({
@@ -136,7 +144,7 @@ exports.getConversationById = async (req, res) => {
     }
 
     // Get messages for this conversation
-    const messages = await Message.find({ conversation_id: req.params.id })
+    const messages = await Message.find({ conversation_id: conversation._id })
       .populate('sender_id', 'nama role')
       .sort({ sent_at: 1 });
 

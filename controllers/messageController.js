@@ -1,43 +1,57 @@
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
+const User = require('../models/User');
+const path = require('path');
+const { sendPushNotification } = require('../config/fcm_service');
 
 // @desc    Send message in a conversation
 // @route   POST /messages
 // @access  Private
 exports.sendMessage = async (req, res) => {
   try {
-    console.log('Request headers:', req.headers);
-    console.log('Request body:', req.body);
-    console.log('Content-Type:', req.headers['content-type']);
-    
     const { conversation_id, isi_pesan } = req.body || {};
+    const imageFile = req.file; // dari multer upload.single('image')
 
-    console.log('Parsed conversation_id:', conversation_id);
-    console.log('Parsed isi_pesan:', isi_pesan);
+    // Harus ada salah satu: teks atau gambar
+    const hasText = isi_pesan && isi_pesan.trim() !== '';
+    const hasImage = !!imageFile;
 
-    if (!conversation_id || !isi_pesan || isi_pesan.trim() === '') {
-      console.error('Validation failed - Missing required fields');
+    if (!conversation_id) {
+      if (imageFile) {
+        // Hapus file yang sudah terupload jika validasi gagal
+        const fs = require('fs');
+        fs.unlink(imageFile.path, () => {});
+      }
       return res.status(400).json({
         success: false,
-        message: 'Conversation ID and message content are required'
+        message: 'Conversation ID is required'
+      });
+    }
+
+    if (!hasText && !hasImage) {
+      return res.status(400).json({
+        success: false,
+        message: 'Message content or image is required'
       });
     }
 
     // Check if conversation exists
     const conversation = await Conversation.findById(conversation_id);
     if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Conversation not found'
-      });
+      if (imageFile) {
+        const fs = require('fs');
+        fs.unlink(imageFile.path, () => {});
+      }
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
     // Check if conversation is locked
     if (conversation.is_locked) {
-      return res.status(403).json({
-        success: false,
-        message: 'Cannot send message to closed conversation'
-      });
+      if (imageFile) {
+        const fs = require('fs');
+        fs.unlink(imageFile.path, () => {});
+      }
+      return res.status(403).json({ success: false, message: 'Cannot send message to closed conversation' });
     }
 
     // Check if user is participant
@@ -46,17 +60,24 @@ exports.sendMessage = async (req, res) => {
     );
 
     if (!isParticipant && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not a participant in this conversation'
-      });
+      if (imageFile) {
+        const fs = require('fs');
+        fs.unlink(imageFile.path, () => {});
+      }
+      return res.status(403).json({ success: false, message: 'You are not a participant in this conversation' });
     }
+
+    // Build image_url jika ada file
+    const image_url = imageFile
+      ? `/uploads/chat/${imageFile.filename}`
+      : null;
 
     // Create message
     const message = await Message.create({
       conversation_id,
       sender_id: req.user._id,
-      isi_pesan: isi_pesan.trim()
+      isi_pesan: hasText ? isi_pesan.trim() : '',
+      image_url
     });
 
     // Update conversation updatedAt
@@ -66,11 +87,44 @@ exports.sendMessage = async (req, res) => {
     // Populate sender info
     await message.populate('sender_id', 'nama role');
 
-    // Emit socket event to all users in the conversation
+    // Emit socket event
     if (global.io) {
       global.io.to(`conversation_${conversation_id}`).emit('new_message', {
         message: message
       });
+    }
+
+    // Kirim push notification ke peserta lain (non-pengirim)
+    const otherParticipantIds = conversation.participants.filter(
+      p => p.toString() !== req.user._id.toString()
+    );
+
+    if (otherParticipantIds.length > 0) {
+      const recipients = await User.find(
+        { _id: { $in: otherParticipantIds }, fcm_tokens: { $exists: true, $not: { $size: 0 } } },
+        'fcm_tokens'
+      );
+
+      const allTokens = recipients.flatMap(u => u.fcm_tokens);
+
+      if (allTokens.length > 0) {
+        const notifTitle = `Pesan baru dari ${req.user.nama}`;
+        const notifBody = hasImage ? '📷 Mengirim gambar' : (isi_pesan.length > 100 ? isi_pesan.substring(0, 100) + '...' : isi_pesan);
+
+        const invalidTokens = await sendPushNotification(allTokens, notifTitle, notifBody, {
+          conversation_id: conversation_id.toString(),
+          sender_nama: req.user.nama,
+          message_id: message._id.toString(),
+        });
+
+        // Bersihkan token yang sudah tidak valid
+        if (invalidTokens && invalidTokens.length > 0) {
+          await User.updateMany(
+            { fcm_tokens: { $in: invalidTokens } },
+            { $pull: { fcm_tokens: { $in: invalidTokens } } }
+          );
+        }
+      }
     }
 
     res.status(201).json({
@@ -79,10 +133,7 @@ exports.sendMessage = async (req, res) => {
     });
   } catch (error) {
     console.error('Send message error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 

@@ -141,3 +141,60 @@ exports.deleteUser = async (req, res) => {
     });
   }
 };
+
+// @desc    Simpan / update FCM token untuk device pengguna
+// @route   POST /users/fcm-token
+// @access  Private
+exports.saveFcmToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token || typeof token !== 'string' || token.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'FCM token wajib diisi'
+      });
+    }
+
+    // Tambahkan token jika belum ada ($addToSet mencegah duplikat)
+    await User.findByIdAndUpdate(
+      req.user._id,
+      { $addToSet: { fcm_tokens: token.trim() } },
+      { new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'FCM token berhasil disimpan'
+    });
+  } catch (error) {
+    console.error('Save FCM token error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Hapus FCM token (logout device)
+// @route   DELETE /users/fcm-token
+// @access  Private
+exports.removeFcmToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ success: false, message: 'FCM token wajib diisi' });
+    }
+
+    await User.findByIdAndUpdate(
+      req.user._id,
+      { $pull: { fcm_tokens: token } }
+    );
+
+    res.status(200).json({ success: true, message: 'FCM token berhasil dihapus' });
+  } catch (error) {
+    console.error('Remove FCM token error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

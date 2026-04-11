@@ -158,15 +158,13 @@ Contoh response:
 
 Collection user menyimpan akun sistem.
 
-| Field | Tipe | Keterangan |
-|---|---|---|
-| `work_id` | String | wajib, unik |
-| `nama` | String | wajib |
-| `email` | String | wajib, unik, lowercase |
-| `password` | String | wajib, minimal 6 karakter, disimpan dalam bentuk hash |
-| `role` | String | enum: `user`, `admin`, `it_staff` |
-| `createdAt` | Date | otomatis |
-| `updatedAt` | Date | otomatis |
+- `work_id` — Type: String. Keterangan: wajib, unik.
+- `nama` — Type: String. Keterangan: wajib.
+- `email` — Type: String. Keterangan: wajib, unik, lowercase.
+- `password` — Type: String. Keterangan: wajib, minimal 6 karakter, disimpan dalam bentuk hash.
+- `role` — Type: String. Keterangan: enum: `user`, `admin`, `it_staff`.
+- `createdAt` — Type: Date. Keterangan: otomatis.
+- `updatedAt` — Type: Date. Keterangan: otomatis.
 
 Perilaku tambahan:
 
@@ -177,16 +175,14 @@ Perilaku tambahan:
 
 Merepresentasikan tiket help desk.
 
-| Field | Tipe | Keterangan |
-|---|---|---|
-| `subject` | String | wajib |
-| `participants` | ObjectId[] | referensi ke `User` |
-| `status` | String | enum: `open`, `in_progress`, `closed` |
-| `is_locked` | Boolean | `true` jika tiket sudah ditutup |
-| `closed_by` | ObjectId | referensi ke `User`, default `null` |
-| `closed_at` | Date | waktu penutupan, default `null` |
-| `createdAt` | Date | otomatis |
-| `updatedAt` | Date | otomatis |
+- `subject` — Type: String. Keterangan: wajib.
+- `participants` — Type: ObjectId[]. Keterangan: referensi ke `User`.
+- `status` — Type: String. Keterangan: enum: `open`, `in_progress`, `closed`.
+- `is_locked` — Type: Boolean. Keterangan: `true` jika tiket sudah ditutup.
+- `closed_by` — Type: ObjectId. Keterangan: referensi ke `User`, default `null`.
+- `closed_at` — Type: Date. Keterangan: waktu penutupan, default `null`.
+- `createdAt` — Type: Date. Keterangan: otomatis.
+- `updatedAt` — Type: Date. Keterangan: otomatis.
 
 Perilaku tambahan:
 
@@ -197,14 +193,12 @@ Perilaku tambahan:
 
 Menyimpan pesan di dalam conversation.
 
-| Field | Tipe | Keterangan |
-|---|---|---|
-| `conversation_id` | ObjectId | referensi ke `Conversation`, wajib |
-| `sender_id` | ObjectId | referensi ke `User`, wajib |
-| `isi_pesan` | String | isi pesan, wajib |
-| `sent_at` | Date | default `Date.now` |
-| `createdAt` | Date | otomatis |
-| `updatedAt` | Date | otomatis |
+- `conversation_id` — Type: ObjectId. Keterangan: referensi ke `Conversation`, wajib.
+- `sender_id` — Type: ObjectId. Keterangan: referensi ke `User`, wajib.
+- `isi_pesan` — Type: String. Keterangan: isi pesan, wajib.
+- `sent_at` — Type: Date. Keterangan: default `Date.now`.
+- `createdAt` — Type: Date. Keterangan: otomatis.
+- `updatedAt` — Type: Date. Keterangan: otomatis.
 
 Perilaku tambahan:
 
@@ -214,16 +208,14 @@ Perilaku tambahan:
 
 Mencatat perubahan penting pada conversation.
 
-| Field | Tipe | Keterangan |
-|---|---|---|
-| `conversation_id` | ObjectId | referensi ke `Conversation`, wajib |
-| `action` | String | enum: `ADD_IT_STAFF`, `CLOSED`, `CREATED`, `REOPENED`, `STATUS_CHANGED` |
-| `actor_id` | ObjectId | user yang melakukan aksi |
-| `target_user_id` | ObjectId | user target, opsional |
-| `details` | String | detail tambahan |
-| `timestamp` | Date | default `Date.now` |
-| `createdAt` | Date | otomatis |
-| `updatedAt` | Date | otomatis |
+- `conversation_id` — Type: ObjectId. Keterangan: referensi ke `Conversation`, wajib.
+- `action` — Type: String. Keterangan: enum: `ADD_IT_STAFF`, `CLOSED`, `CREATED`, `REOPENED`, `STATUS_CHANGED`.
+- `actor_id` — Type: ObjectId. Keterangan: user yang melakukan aksi.
+- `target_user_id` — Type: ObjectId. Keterangan: user target, opsional.
+- `details` — Type: String. Keterangan: detail tambahan.
+- `timestamp` — Type: Date. Keterangan: default `Date.now`.
+- `createdAt` — Type: Date. Keterangan: otomatis.
+- `updatedAt` — Type: Date. Keterangan: otomatis.
 
 ## Autentikasi
 
@@ -385,23 +377,19 @@ auth: {
 
 ### Event dari client
 
-| Event | Payload | Keterangan |
-|---|---|---|
-| `join_conversation` | `conversationId` | join ke room `conversation_<id>` |
-| `leave_conversation` | `conversationId` | leave room conversation |
-| `typing` | `{ conversationId }` | kirim indikator sedang mengetik |
-| `stop_typing` | `{ conversationId }` | hentikan indikator mengetik |
+- `join_conversation` — Payload: `conversationId`. Bergabung ke room `conversation_<id>`.
+- `leave_conversation` — Payload: `conversationId`. Keluar dari room conversation.
+- `typing` — Payload: `{ conversationId }`. Kirim indikator sedang mengetik.
+- `stop_typing` — Payload: `{ conversationId }`. Hentikan indikator mengetik.
 
 ### Event yang di-emit server
 
-| Event | Keterangan |
-|---|---|
-| `new_ticket` | ticket baru dibuat |
-| `it_staff_added` | IT staff ditambahkan ke conversation |
-| `ticket_closed` | conversation ditutup |
-| `new_message` | pesan baru pada room conversation |
-| `user_typing` | participant lain sedang mengetik |
-| `user_stop_typing` | participant lain berhenti mengetik |
+- `new_ticket` — Ticket baru dibuat.
+- `it_staff_added` — IT staff ditambahkan ke conversation.
+- `ticket_closed` — Conversation ditutup.
+- `new_message` — Pesan baru pada room conversation.
+- `user_typing` — Participant lain sedang mengetik.
+- `user_stop_typing` — Participant lain berhenti mengetik.
 
 ## Alur Ticket Yang Diimplementasikan
 

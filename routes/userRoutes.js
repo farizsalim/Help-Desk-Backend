@@ -4,7 +4,11 @@ const userController = require('../controllers/userController');
 const { protect } = require('../middleware/authMiddleware');
 const { isAdmin } = require('../middleware/roleMiddleware');
 
-// All routes require authentication and admin role
+// Route FCM token — hanya butuh autentikasi, tidak perlu admin
+router.post('/fcm-token', protect, userController.saveFcmToken);
+router.delete('/fcm-token', protect, userController.removeFcmToken);
+
+// Routes berikut memerlukan autentikasi & peran admin
 router.use(protect);
 router.use(isAdmin);
 
